@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nmap2Table - Recon Parser</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        transition:
+          background-color 0.2s ease,
+          border-color 0.2s ease,
+          color 0.2s ease;
+      }
+
+      /* light mode (default) */
+      :root {
+        --bg-body: #ffffff;
+        --bg-app: #ffffff;
+        --border-main: #e0e0e0;
+        --text-primary: #1a1a1a;
+        --text-secondary: #5a5a5a;
+        --bg-panel: #f8f8f8;
+        --bg-panel-header: #f0f0f0;
+        --bg-input: #ffffff;
+        --border-input: #cccccc;
+        --button-bg: #eeeeee;
+        --button-border: #aaaaaa;
+        --button-hover: #dddddd;
+        --stats-bg: #f5f5f5;
+        --table-border: #ddd;
+        --table-header: #efefef;
+      }
+
+      /* dark mode */
+      body.dark {
+        --bg-body: #000000;
+        --bg-app: #000000;
+        --border-main: #2a2a2a;
+        --text-primary: #dddddd;
+        --text-secondary: #888888;
+        --bg-panel: #0a0a0a;
+        --bg-panel-header: #0c0c0c;
+        --bg-input: #010101;
+        --border-input: #333333;
+        --button-bg: #1a1a1a;
+        --button-border: #3a3a3a;
+        --button-hover: #2a2a2a;
+        --stats-bg: #080808;
+        --table-border: #333;
+        --table-header: #111;
+      }
+
+      body {
+        background: var(--bg-body);
+        font-family: "SF Mono", "Fira Code", "Courier New", monospace;
+        padding: 2rem 1.5rem;
+        color: var(--text-primary);
+      }
+
+      .app {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+
+      .header {
+        border-bottom: 1px solid var(--border-main);
+        padding-bottom: 1rem;
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        gap: 1rem;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        font-weight: 400;
+        letter-spacing: -0.5px;
+      }
+
+      .theme-toggle {
+        background: var(--button-bg);
+        border: 1px solid var(--button-border);
+        padding: 6px 14px;
+        border-radius: 30px;
+        font-family: monospace;
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: var(--text-primary);
+        cursor: pointer;
+      }
+
+      .theme-toggle:hover {
+        background: var(--button-hover);
+        border-color: var(--text-secondary);
+      }
+
+      .workspace {
+        display: flex;
+        flex-direction: column;
+        gap: 1.8rem;
+      }
+
+      .panel {
+        background: var(--bg-panel);
+        border: 1px solid var(--border-input);
+        border-radius: 12px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .panel-header {
+        padding: 0.8rem 1rem;
+        background: var(--bg-panel-header);
+        border-bottom: 1px solid var(--border-input);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: bold;
+        color: var(--text-secondary);
+        display: flex;
+        justify-content: space-between;
+      }
+
+      textarea {
+        background: var(--bg-input);
+        color: var(--text-primary);
+        font-family: "SF Mono", "Fira Code", monospace;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        padding: 1rem;
+        border: none;
+        width: 100%;
+        min-height: 250px;
+        outline: none;
+        resize: vertical;
+      }
+
+      .cmd-box {
+        background: var(--bg-input);
+        color: #ff5e5e;
+        padding: 1rem;
+        font-size: 0.85rem;
+        border-bottom: 1px solid var(--border-input);
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      body.dark .cmd-box {
+        color: #ff8b8b;
+      }
+
+      .table-container {
+        padding: 1rem;
+        background: var(--bg-input);
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+        text-align: left;
+      }
+
+      th,
+      td {
+        padding: 10px;
+        border: 1px solid var(--table-border);
+        vertical-align: top;
+      }
+
+      th {
+        background: var(--table-header);
+        font-weight: bold;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+      }
+
+      td.notes {
+        white-space: pre-wrap;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+      }
+
+      .btn-copy {
+        background: transparent;
+        border: 1px solid var(--button-border);
+        color: var(--text-primary);
+        padding: 4px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: monospace;
+        font-size: 0.7rem;
+      }
+      .btn-copy:hover {
+        background: var(--button-hover);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="header">
+        <h1>// Nmap2Table</h1>
+        <button id="darkModeToggle" class="theme-toggle">
+          🌓 toggle theme
+        </button>
+      </div>
+
+      <div class="workspace">
+        <div class="panel">
+          <div class="panel-header">
+            <span
+              >INPUT: Paste Raw Nmap Output (-p-, -sV, vuln scripts, etc.)</span
+            >
+          </div>
+          <textarea
+            id="inputArea"
+            placeholder="Paste all your nmap results here..."
+          ></textarea>
+        </div>
+
+        <div class="panel" id="actionPanel" style="display: none">
+          <div class="panel-header"><span>FOLLOW-UP COMMANDS</span></div>
+          <div class="cmd-box" id="cmdOutput"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <span>OUTPUT TABLE (Copy/Paste into Sheets)</span>
+            <button id="copyBtn" class="btn-copy">Copy Table</button>
+          </div>
+          <div class="table-container" id="tableContainer"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Theme Toggle Logic
+      const toggleBtn = document.getElementById("darkModeToggle");
+      if (
+        localStorage.getItem("theme") === "dark" ||
+        (!localStorage.getItem("theme") &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)
+      ) {
+        document.body.classList.add("dark");
+      }
+      toggleBtn.addEventListener("click", () => {
+        document.body.classList.toggle("dark");
+        localStorage.setItem(
+          "theme",
+          document.body.classList.contains("dark") ? "dark" : "light",
+        );
+      });
+
+      const inputArea = document.getElementById("inputArea");
+      const tableContainer = document.getElementById("tableContainer");
+      const cmdOutput = document.getElementById("cmdOutput");
+      const actionPanel = document.getElementById("actionPanel");
+
+      function getGroup(port, service) {
+        if (!service) service = "";
+        service = service.toLowerCase();
+        if (
+          [139, 445].includes(port) ||
+          service.includes("netbios") ||
+          service.includes("microsoft-ds")
+        )
+          return "SMB";
+        if ([22].includes(port) || service.includes("ssh")) return "SSH";
+        if ([21].includes(port) || service.includes("ftp")) return "FTP";
+        if (
+          [80, 443, 8000, 8080, 5985].includes(port) ||
+          service.includes("http") ||
+          service.includes("wsman")
+        )
+          return "HTTP";
+        if ([25, 465, 587].includes(port) || service.includes("smtp"))
+          return "SMTP";
+        return "Other";
+      }
+
+      function processNmap() {
+        const text = inputArea.value;
+        if (!text.trim()) {
+          tableContainer.innerHTML = "";
+          actionPanel.style.display = "none";
+          return;
+        }
+
+        const lines = text.split("\n");
+        const ports = {};
+        let targetIP = "$target";
+        let currentPort = null;
+        let globalNotes = [];
+        let totalUniquePorts = 0;
+        let hasSMTP = false;
+
+        lines.forEach((line) => {
+          // Extract target IP
+          let ipMatch = line.match(/Nmap scan report for ([\d\.]+)/);
+          if (ipMatch) targetIP = ipMatch[1];
+
+          // Match port lines: "22/tcp  open  ssh   OpenSSH..."
+          let portMatch = line.match(
+            /^(\d+)\/(tcp|udp)\s+(open|filtered|closed)\s+([\w?-]+)(?:\s+(.*))?$/,
+          );
+          if (portMatch) {
+            let portNum = parseInt(portMatch[1]);
+            let protocol = portMatch[2];
+            let state = portMatch[3];
+            let service = portMatch[4];
+            let version = portMatch[5] || "";
+
+            if (!ports[portNum]) {
+              ports[portNum] = {
+                port: portNum,
+                protocol,
+                state,
+                service,
+                version,
+                notes: [],
+              };
+              totalUniquePorts++;
+            } else {
+              if (version && !ports[portNum].version)
+                ports[portNum].version = version;
+              // Only overwrite service if the new one is more descriptive
+              if (
+                service &&
+                service !== "unknown" &&
+                (!ports[portNum].service ||
+                  ports[portNum].service === "unknown")
+              ) {
+                ports[portNum].service = service;
+              }
+            }
+            currentPort = portNum;
+
+            if ([25, 465, 587].includes(portNum) || service.includes("smtp"))
+              hasSMTP = true;
+          }
+          // Match script outputs (starts with | or |_)
+          else if (line.trim().startsWith("|")) {
+            let cleanNote = line.replace(/^\|\s*_?/, "").trim();
+            if (currentPort && ports[currentPort]) {
+              ports[currentPort].notes.push(cleanNote);
+            } else if (
+              line.includes("Host script results:") ||
+              line.includes("Pre-scan script results:") ||
+              currentPort === null
+            ) {
+              globalNotes.push(cleanNote);
+            }
+          }
+          // Reset port on empty line or new sections
+          else if (
+            line.trim() === "" ||
+            line.startsWith("Host script results:") ||
+            line.startsWith("Read data files") ||
+            line.startsWith("Pre-scan")
+          ) {
+            currentPort = null;
+          }
+        });
+
+        // Attach global scripts (like SMB vulns) to port 445 or 139 FIRST
+        if (globalNotes.length > 0) {
+          if (ports[445]) {
+            ports[445].notes.push("HOST SCRIPTS:\n" + globalNotes.join("\n"));
+          } else if (ports[139]) {
+            ports[139].notes.push("HOST SCRIPTS:\n" + globalNotes.join("\n"));
+          } else {
+            // If neither exists, append to the first available port just to preserve the data
+            let firstPort = Object.keys(ports)[0];
+            if (firstPort) {
+              ports[firstPort].notes.push(
+                "HOST SCRIPTS:\n" + globalNotes.join("\n"),
+              );
+            }
+          }
+        }
+
+        // Determine Missing Ports (Ports that have NO version info and NO specific notes attached, and are OPEN)
+        // Note: ALL ports remain in the validPorts array to be shown in the table.
+        let missingPorts = [];
+        let validPorts = Object.values(ports);
+
+        validPorts.forEach((p) => {
+          if (!p.version && p.notes.length === 0 && p.state === "open") {
+            missingPorts.push(p.port);
+          }
+        });
+
+        // Generate Commands
+        let cmds = "";
+        if (missingPorts.length > 0) {
+          cmds += `// Deep scan remaining ports without version detection\nsudo nmap -Pn -n ${targetIP} -sC -sV -p ${missingPorts.join(",")}\n\n`;
+        }
+        if ((totalUniquePorts > 0 && totalUniquePorts <= 3) || hasSMTP) {
+          cmds += `// Few ports or SMTP found. UDP scan highly recommended\nsudo nmap -sU -sV --version-intensity 0 -F -n ${targetIP}\n`;
+        }
+
+        if (cmds) {
+          cmdOutput.innerText = cmds.trim();
+          actionPanel.style.display = "flex";
+        } else {
+          actionPanel.style.display = "none";
+        }
+
+        // Sort Data by Group, then Port
+        const groupOrder = {
+          SMB: 1,
+          HTTP: 2,
+          FTP: 3,
+          SSH: 4,
+          SMTP: 5,
+          Other: 6,
+        };
+        validPorts.sort((a, b) => {
+          let gA = getGroup(a.port, a.service);
+          let gB = getGroup(b.port, b.service);
+          if (groupOrder[gA] !== groupOrder[gB])
+            return groupOrder[gA] - groupOrder[gB];
+          return a.port - b.port;
+        });
+
+        // Generate HTML Table
+        let tableHTML = `
+          <table id="resultTable">
+            <thead>
+              <tr>
+                <th>Group</th>
+                <th>Port</th>
+                <th>State</th>
+                <th>Service</th>
+                <th>Version</th>
+                <th>Notes / Scripts</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+
+        validPorts.forEach((p) => {
+          let group = getGroup(p.port, p.service);
+          tableHTML += `
+              <tr>
+                <td><strong>${group}</strong></td>
+                <td>${p.port}/${p.protocol}</td>
+                <td>${p.state}</td>
+                <td>${p.service}</td>
+                <td>${p.version}</td>
+                <td class="notes">${p.notes.join("\n")}</td>
+              </tr>
+            `;
+        });
+
+        tableHTML += `</tbody></table>`;
+        tableContainer.innerHTML = tableHTML;
+      }
+
+      inputArea.addEventListener("input", processNmap);
+
+      // Copy to Clipboard via modern API
+      document.getElementById("copyBtn").addEventListener("click", () => {
+        const elTable = document.getElementById("resultTable");
+        if (!elTable) return;
+
+        const range = document.createRange();
+        range.selectNode(elTable);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+
+        try {
+          document.execCommand("copy");
+          const btn = document.getElementById("copyBtn");
+          btn.innerText = "Copied!";
+          setTimeout(() => (btn.innerText = "Copy Table"), 1500);
+        } catch (err) {
+          console.error("Unable to copy");
+        }
+        window.getSelection().removeAllRanges();
+      });
+    </script>
+  </body>
+</html>
